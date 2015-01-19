@@ -84,8 +84,10 @@
   (assert (every? (partial instance? IQuantity) [quantity-1 quantity-2]))
   (let [units-1 (.getUnits ^IQuantity quantity-1)
         units-2 (.getUnits ^IQuantity quantity-2)]
-    (boolean (and (= quantity-1 quantity-2)
-                  (units-equal? quantity-1 quantity-2)))))
+    (if (not (units-equal? quantity-1 quantity-2))
+      (throw (ExceptionInfo. "Two quantities that are compared should have equal units." {:quantity-1 quantity-1
+                                                                                          :quantity-2 quantity-2})))
+    (boolean (= quantity-1 quantity-2))))
 
 (def ^{:doc "Function that multiplies two quantities."}
        quantities-multiply* (->quantity-operation-fn * +))

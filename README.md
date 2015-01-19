@@ -12,8 +12,25 @@ A Clojure library for math with units.  The key features are
 To be clear, this is highly experimental.  API changes are entirely possible and indeed likely, so usage in anything other than throwaway hobby projects is discouraged at this time.  There is significant test coverage, but it isn't complete coverage, and everyone writes bugs.
 
 ## Usage
+Define quantities
 
-FIXME
+```(def length (->quantity 3 {:meters 1}))```
+
+```(def width (->quantity 4 {:meters 1}))```
+
+Then operate on the quantities
+
+```(quantities-multiply length width)
+=> 12 meters^2```
+
+Quantities that are compared should have equal units.
+
+```
+(quantities-equal? (->quantity 1 {:ft 1}) (->quantity 1 {:m 1}))
+=>
+ExceptionInfo Two quantities that are compared should have equal units.
+```
+
 
 ## License
 

@@ -6,7 +6,9 @@
             [clojure.test.check.clojure-test :as check-test]
             [clojure.math.combinatorics :as combo])
   (:import [wparker.units
-            IQuantity]))
+            IQuantity]
+           [clojure.lang
+            ExceptionInfo]))
 
 ;;; Basic sanity tests of addition, subtraction, multiplication, and division.
 (deftest quantities-multiply-test
@@ -52,18 +54,27 @@
         multiplied (quantities-multiply* a b)]
     (is (= (.getUnits ^IQuantity multiplied) {:s 2}))))
 
+;;; Tests that different units cannot be incorrectly mixed.
+
+(deftest compare-different-units
+  (let [a (->quantity* 5 {:ft 1})
+        b (->quantity* 5 {:ft 2})]
+    (is (thrown? ExceptionInfo (quantities-equal?* a b)))
+    (is (thrown? ExceptionInfo (quantities-add* a b)))
+    (is (thrown? ExceptionInfo (quantities-subtract* a b)))))
+
 ;;; Verify that the various macros behave as expected for both true and false values of *assert*.  Note that
 ;;; *assert* is set to true in project.clj.  It is necessary to use eval in order to delay compilation of test data
 ;;; until *assert* has been rebound to false.
 
 (deftest quantities-equivalent-macro-test
-  (let [a `(->quantity* 15 {:lbs 10})
-        b `(->quantity* 15 {:lbs 9})]
+  (let [a `(->quantity* 15 {:lbs 9})
+        b `(->quantity* 15 {:lbs 10})]
     (is (binding [*assert* false]
           (eval `(quantities-equal? ~a ~b))))
-    (is (not (quantities-equal?
-              (eval a)
-              (eval b))))))
+    (is (thrown? ExceptionInfo (quantities-equal?
+                                (eval a)
+                                (eval b))))))
 
 (deftest quantity-build-macro-test
   (let [a `(->quantity 5 {:kg 2})]
