@@ -36,7 +36,7 @@
         (filter #(not (== 0 (val %))) units)))
 
 (defn units-equal?
-  "Tests if two sets of units are equal."
+  "Tests if two quantities have the same units."
   [quantity-1 quantity-2]
   (assert (every? (partial instance? IQuantity) [quantity-1 quantity-2]))
   (let [units-1 (.getUnits ^IQuantity quantity-1)
@@ -87,7 +87,7 @@
     (if (not (units-equal? quantity-1 quantity-2))
       (throw (ExceptionInfo. "Two quantities that are compared should have equal units." {:quantity-1 quantity-1
                                                                                           :quantity-2 quantity-2})))
-    (boolean (= quantity-1 quantity-2))))
+    (boolean (== quantity-1 quantity-2))))
 
 (def ^{:doc "Function that multiplies two quantities."}
        quantities-multiply* (->quantity-operation-fn * +))
@@ -114,7 +114,7 @@
   [q1 q2]
   (if *assert*
     `(wparker.units.core/quantities-equal?* ~q1 ~q2)
-    `(= ~q1 ~q2)))
+    `(== ~q1 ~q2)))
 
 (defmacro quantities-add [q1 q2]
   "Macro that expands to add quantities if the global flag *assert* is true and expands to simple addition otherwise."
@@ -139,7 +139,3 @@
   (if *assert*
     `(wparker.units.core/quantities-divide* ~q1 ~q2)
     `(/ ~q1 ~q2)))
-
-
-
-

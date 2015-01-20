@@ -63,18 +63,41 @@
     (is (thrown? ExceptionInfo (quantities-add* a b)))
     (is (thrown? ExceptionInfo (quantities-subtract* a b)))))
 
+
+;;; Test quantity equality
+
+(deftest test-quantity-equality-same-units
+  (let [a (->quantity* 4 {:m 1})
+        b (->quantity* 4M {:m 1})
+        c (->quantity* 3 {:m 1})
+        d (->quantity 0.5 {:m 1})
+        e (->quantity (/ 1 2) {:m 1})]
+    (is (quantities-equal?* a b))
+    (is (not (quantities-equal?* b c)))
+    (is (not (quantities-equal?* a c)))
+    ;; Test of equality of .5 to the Clojure ratio type with value 1/2.  This works
+    ;; since .5 has an exact binary representation.
+    (is (quantities-equal?* d e))
+    ;;(is (ratio? e))
+    ;; TODO: Uncomment this test when defects around ratio-based math are fixed.
+    ))
+
+
 ;;; Verify that the various macros behave as expected for both true and false values of *assert*.  Note that
 ;;; *assert* is set to true in project.clj.  It is necessary to use eval in order to delay compilation of test data
 ;;; until *assert* has been rebound to false.
 
 (deftest quantities-equivalent-macro-test
   (let [a `(->quantity* 15 {:lbs 9})
-        b `(->quantity* 15 {:lbs 10})]
+        b `(->quantity* 15 {:lbs 10})
+        c `(->quantity* 15M {:lbs 10})]
     (is (binding [*assert* false]
-          (eval `(quantities-equal? ~a ~b))))
+          (and (eval `(quantities-equal? ~a ~b))
+               (eval `(quantities-equal? ~b ~c)))))
     (is (thrown? ExceptionInfo (quantities-equal?
                                 (eval a)
-                                (eval b))))))
+                                (eval b))))
+    (is (quantities-equal? (eval b) (eval c)))))
 
 (deftest quantity-build-macro-test
   (let [a `(->quantity 5 {:kg 2})]
@@ -178,3 +201,44 @@
                   (and (every? (partial apply quantities-equal?*) result-pairs)
                        (every? (partial apply =) result-pairs)
                        (every? (partial = (apply + vs)) permutations-added)))))
+
+(check-test/defspec parameterized-subtraction-test
+  100
+  (prop/for-all [h gen/int
+                 ts (gen/such-that #(> (count %) 2) (gen/vector gen/int))]
+                ;; Shuffle the elements after the first, but keep the first element in the vector constant.
+                (let [h-built (->quantity* h {:ft 1})
+                      ts-built (map #(->quantity* % {:ft 1}) ts)
+                      shuffled-ts (map shuffle (repeat 5 ts-built))
+                      shuffled-full (map (partial concat [h-built]) shuffled-ts)
+                      permutations-subtracted (map (partial reduce quantities-subtract*) shuffled-full)
+                      result-pairs (combo/cartesian-product permutations-subtracted permutations-subtracted)]
+
+                  (and (every? (partial apply quantities-equal?*) result-pairs)
+                       (every? (partial apply =) result-pairs)
+                       (every? (partial = (apply -
+                                                 (concat [h] ts)))
+                               permutations-subtracted)))))
+
+;;; In order to avoid floating-point problems, take a vector of integers, multiply them all together, and verify that successively dividing the product
+;;; by each of the set in any order yields 1.
+(check-test/defspec parameterized-division-test
+  100
+  (prop/for-all [ns (gen/resize 8
+                                (gen/such-that
+                                 #(> (count %) 2)
+                                 (gen/vector gen/s-pos-int)))]
+                (let [ns-product (->quantity* (reduce * ns) {:ft 10})
+                      ns-shuffled (map shuffle (repeat 10 ns))
+                      qs-shuffled (map (fn [lyst] (map #(->quantity* % {:ft 1}) lyst)) ns-shuffled)]
+                  (every? #(let [divided (reduce quantities-divide* ns-product %)]
+                             (and (== 1 divided)
+                                  (let [size (count ns)
+                                        units (.getUnits ^IQuantity divided)]
+                                    (if (not (= size 10))
+                                      (= units {:ft (- 10 (count ns))})
+                                      (= units {})))))
+                          qs-shuffled))))
+
+
+

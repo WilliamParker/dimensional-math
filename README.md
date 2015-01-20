@@ -29,7 +29,19 @@ Quantities that are compared should have equal units.
 (quantities-equal? (->quantity 1 {:ft 1}) (->quantity 1 {:m 1}))
 =>
 ExceptionInfo Two quantities that are compared should have equal units.
+
 ```
+
+## Known defects/limitations/todos:
+
+-Add ability to build quantities that extend clojure.lang.Ratio (which itself extends java.lang.Number).  Currently Ratio types that are passed to the quantity builder
+are coerced to decimals.
+-Add ability to specify an equality range instead of just using ==.  This is necessary for floating-point math.  Note that this does not just apply to magnitudes; unit equality with non-integer powers
+could have problems as well.
+-Investigate giving users some sort of helper to build the macros that expand to quantity-based or raw numeric functions.  I need to determine if this is possible; macros don't have as many options for manipulation as functions do.
+-Add more functions.
+-Add ability to switch between quantities and unchecked math; the only switching is currently between quantity-based and boxed math.
+-Use a compiler flag other than \*assert\*.
 
 
 ## License
