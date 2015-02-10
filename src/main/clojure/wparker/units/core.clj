@@ -1,36 +1,85 @@
 (ns wparker.units.core
   (:require [clojure.string])
-  (:import [java.lang
-            Number]
-           [wparker.units
-            IQuantity]
+  (:import [clojure.lang
+            ExceptionInfo]
+           [org.apache.commons.collections.map
+            ReferenceIdentityMap]
            [clojure.lang
-            ExceptionInfo]))
+            ExceptionInfo
+            Ratio]))
 
-(defn ->quantity*
-  "Builds a quantity.  The magnitude is a number and units is a persistent Clojure map of keyword to powers of units.
-  For example, if we want 5 square feet, we would call (->quantity* 5 {:ft 2})."
-  [magnitude units]
-  (proxy [Number IQuantity] []  ;;Uses proxy since reify does not support abstract classes.
-    (byteValue [] (byte magnitude))
-    (doubleValue [] (double magnitude))
-    (floatValue [] (float magnitude))
-    (intValue [] (int magnitude))
-    (longValue [] (long magnitude))
-    (shortValue [] (long magnitude))
-    ;; Object method implementations
-    (equals [other] (= magnitude other))
-    (hashCode [] (hash magnitude))
-    (toString [] (str magnitude " "
-                      (apply str (clojure.string/join " "
-                                                      (map #(str (name (key %))
-                                                                 "^"
-                                                                 (val %))
-                                                           units)))))
-    ;; IUnit implementations
-    (getUnits [] units)))
+(def units-map (java.util.Collections/synchronizedMap
+                (ReferenceIdentityMap.)))
 
-(defn ^{:private true :doc "Filters units with a power of 0 from a units map"}
+(defn ^{:doc "Returns true if its argument corresponds to a quantity and false otherwise."}
+  quantity? [x]
+  (.containsKey ^java.util.Map units-map x))
+
+(defn ^{:doc "Given a quantity, returns its units map."}
+  quantity->units [x]
+  (.get ^java.util.Map units-map x))
+
+(defprotocol ^{:doc "Every type that can be considered a quantity needs to implement the clone-number function.  The contract is that given an argument
+               x, x.equals(y), but x and y are different object instances."}
+  CloneableNumber
+  (clone-number [x]))
+
+(defn ^{:doc "Checks if two numbers are identical objects.  If they are, an exception is thrown.  If they are not, the second one is returned."}
+  number-instance-check [x y]
+  (if (identical? x y)
+    (throw (ExceptionInfo. "The units library failed to create a new instance of a number when creating a quantity." {:values [x y]}))
+    y))
+
+(defn ^{:doc "Takes a function that copies a number in accordance with the clone-number contract and wraps it with a test that the number was
+        successfully copied."}
+  ->checked-copy-fn [f]
+  (fn [x]
+    (number-instance-check x (f x))))
+
+(extend-protocol CloneableNumber
+  java.lang.Integer
+  (clone-number [x] ((->checked-copy-fn #(java.lang.Integer. ^java.lang.Integer %)) x))
+  java.lang.Long
+  (clone-number [x] ((->checked-copy-fn #(java.lang.Long. ^java.lang.Long %)) x))
+  java.lang.Short
+  (clone-number [x] ((->checked-copy-fn #(java.lang.Short. ^java.lang.Short %)) x))
+  java.lang.Float
+  (clone-number [x] ((->checked-copy-fn #(java.lang.Float. ^java.lang.Float %)) x))
+  java.lang.Double
+  (clone-number [x] ((->checked-copy-fn #(java.lang.Double. ^java.lang.Double %)) x))
+  java.lang.Byte
+  (clone-number [x] ((->checked-copy-fn #(java.lang.Byte. ^java.lang.Byte %)) x))
+  java.math.BigDecimal
+  (clone-number [x] ((->checked-copy-fn #(java.math.BigDecimal. (.toString ^java.math.BigDecimal %))) x))
+  java.math.BigInteger
+  (clone-number [x] ((->checked-copy-fn #(java.math.BigInteger. (.toString ^java.math.BigInteger %))) x))
+
+  clojure.lang.BigInt
+  (clone-number [x] ((->checked-copy-fn #(clojure.lang.BigInt/fromBigInteger (.toBigInteger ^clojure.lang.BigInt %))) x))
+  clojure.lang.Ratio
+  (clone-number [x] ((->checked-copy-fn #(clojure.lang.Ratio. (.numerator ^Ratio %) (.denominator ^Ratio %))) x))
+
+  Object
+  (clone-number [_] (throw (java.lang.IllegalArgumentException. "Type not supported by CloneableNumber."))))
+
+(defn ^{:doc "Given a number, returns a new number instance that is associated with the given units."}
+  ->quantity* [magnitude units]
+  (let [copied-num (clone-number magnitude)]
+    (.put ^java.util.Map units-map copied-num units)
+    copied-num))
+
+(defn ^{:doc "Returns a string representing a quantity with units.  Note that the standard str function just returns
+        the magnitude as a string, while this function includes units.  If unit checking is only turned on in testing this function
+        should also only be used in testing."}
+  quantity->str [quantity]
+  (str quantity " "
+       (apply str (clojure.string/join " "
+                                       (map #(str (name (key %))
+                                                  "^"
+                                                  (val %))
+                                            (quantity->units quantity))))))
+
+(defn ^{:private true :doc "Filters units with a power of 0 from a units map."}
   filter-zeroes [units]
   (into {}
         (filter #(not (== 0 (val %))) units)))
@@ -38,12 +87,12 @@
 (defn units-equal?
   "Tests if two quantities have the same units."
   [quantity-1 quantity-2]
-  (assert (every? (partial instance? IQuantity) [quantity-1 quantity-2]))
-  (let [units-1 (.getUnits ^IQuantity quantity-1)
-        units-2 (.getUnits ^IQuantity quantity-2)]
+  (assert (every? quantity? [quantity-1 quantity-2]))
+  (let [units-1 (quantity->units quantity-1)
+        units-2 (quantity->units quantity-2)]
     (boolean (and (= (set (keys units-1))
                      (set (keys units-2)))
-                  (every? #(== (units-1 %) ;; TODO: Update to allow user to specify an equality tolerance for floating-point powers.
+                  (every? #(== (units-1 %) ;; TODO: Update to allow user to specify an equality tolerance for floating-point powers of units.
                                (units-2 %))
                           (keys units-1))))))
 
@@ -55,10 +104,10 @@
   The unit-fn can assume that it will receive numeric arguments; if a unit is not present in a quantity its' power is 0."
   [math-fn unit-fn]
   (fn [quantity-1 quantity-2]
-    (assert (every? (partial instance? IQuantity) [quantity-1 quantity-2]))
+    (assert (every? quantity? [quantity-1 quantity-2]))
     (->quantity* (math-fn quantity-1 quantity-2)
-                 (filter-zeroes (let [units-1 (.getUnits ^IQuantity quantity-1)
-                                      units-2 (.getUnits ^IQuantity quantity-2)
+                 (filter-zeroes (let [units-1 (quantity->units quantity-1)
+                                      units-2 (quantity->units quantity-2)
                                       all-keys (distinct (concat (keys units-1)
                                                                  (keys units-2)))
                                       units-power-fn (fn [k] ((fnil unit-fn 0 0)
@@ -71,19 +120,19 @@
   have different units an exception is thrown."
   ([math-fn]
    (fn [quantity-1 quantity-2]
-     (assert (every? (partial instance? IQuantity) [quantity-1 quantity-2]))
+     (assert (every? quantity? [quantity-1 quantity-2]))
      (if (units-equal? quantity-1 quantity-2)
        (->quantity* (math-fn quantity-1 quantity-2)
-                   (.getUnits ^IQuantity quantity-1))
+                   (quantity->units quantity-1))
        (throw (ExceptionInfo. "Quantities do not have the same units" {:quantity-1 quantity-1
                                                                        :quantity-2 quantity-2}))))))
 
 (defn quantities-equal?*
   "Tests if two quantities are equal.  The arguments should always be quantities."
   [quantity-1 quantity-2]
-  (assert (every? (partial instance? IQuantity) [quantity-1 quantity-2]))
-  (let [units-1 (.getUnits ^IQuantity quantity-1)
-        units-2 (.getUnits ^IQuantity quantity-2)]
+  (assert (every? quantity? [quantity-1 quantity-2]))
+  (let [units-1 (quantity->units quantity-1)
+        units-2 (quantity->units quantity-2)]
     (if (not (units-equal? quantity-1 quantity-2))
       (throw (ExceptionInfo. "Two quantities that are compared should have equal units." {:quantity-1 quantity-1
                                                                                           :quantity-2 quantity-2})))
