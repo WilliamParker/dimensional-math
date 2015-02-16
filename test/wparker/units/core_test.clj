@@ -8,6 +8,9 @@
   (:import [clojure.lang
             ExceptionInfo]))
 
+;; Allows tests against the private units map.
+(def units-map (var-get #'wparker.units.core/units-map))
+
 (deftest ^{:doc "Test that all numeric types for which the library implemements clone-number implement it correctly."}
   number-copy-tests
   (let [number-copy-assertions (fn [a b]
@@ -48,7 +51,7 @@
     (is (nil? (.get units-map (int 4))))))
 
 (check-test/defspec quantity-creation-parameterized
-  30 ;; TODO: The time taken by this test seems to be far greater than the time taken when I build a large number of quantities
+  50 ;; TODO: The time taken by this test seems to be far greater than the time taken when I build a large number of quantities
   ;; in a REPL.  Until this is fixed the test size must be limited to relatively small numbers.
   (prop/for-all [n (gen/one-of [gen/int gen/ratio]) ;; TODO: Add other numeric type generators when they are available.
                  units (gen/map gen/keyword gen/int)]
@@ -66,7 +69,7 @@
     (is (= (quantity->units multiplied)
            {:kg 10 :m 2}))
     (is (quantities-equal?* multiplied
-                           (->quantity* 21 {:kg 10 :m 2})))))
+                            (->quantity* 21 {:kg 10 :m 2})))))
 
 (deftest quantities-divide-test
   (let [a (->quantity* 6 {:kg 7})
@@ -207,7 +210,7 @@
 ;;; ->quantity-operation-fn and ->quantities-equal-fn as well, since these functions build the functions under test.
 
 (check-test/defspec parameterized-multiplication-test
-  30
+  50
   (prop/for-all [raw-qs (gen/resize 8 (gen/such-that #(> (count %) 2)
                                                      (gen/vector (gen/tuple gen/int (gen/map gen/keyword gen/int)))))]
                 ;; Setting the size prevents integer overflow, since the size caps the magnitude of gen/int.
@@ -227,7 +230,7 @@
 ;;; Note that the generators for addition and multiplication are different in that added quantities must all have the same units.
 
 (check-test/defspec parameterized-addition-test
-  30
+  50
   (prop/for-all [vs (gen/such-that #(> (count %) 2)
                                    (gen/vector gen/int))
                  units (gen/map gen/keyword gen/int)]
@@ -242,7 +245,7 @@
                        (every? (partial = (apply + vs)) permutations-added)))))
 
 (check-test/defspec parameterized-subtraction-test
-  30
+  50
   (prop/for-all [h gen/int
                  ts (gen/such-that #(> (count %) 2) (gen/vector gen/int))]
                 ;; Shuffle the elements after the first, but keep the first element in the vector constant.
@@ -262,7 +265,7 @@
 ;;; In order to avoid floating-point problems, take a vector of integers, multiply them all together, and verify that successively dividing the product
 ;;; by each of the set in any order yields 1.
 (check-test/defspec parameterized-division-test
-  30
+  50
   (prop/for-all [ns (gen/resize 8
                                 (gen/such-that
                                  #(> (count %) 2)

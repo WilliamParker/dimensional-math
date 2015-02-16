@@ -8,8 +8,9 @@
             ExceptionInfo
             Ratio]))
 
-(def units-map (java.util.Collections/synchronizedMap
-                (ReferenceIdentityMap.)))
+;; Stores the map of number objects to units.
+(def ^:private units-map (java.util.Collections/synchronizedMap
+                          (ReferenceIdentityMap.)))
 
 (defn ^{:doc "Returns true if its argument corresponds to a quantity and false otherwise."}
   quantity? [x]
@@ -123,7 +124,7 @@
      (assert (every? quantity? [quantity-1 quantity-2]))
      (if (units-equal? quantity-1 quantity-2)
        (->quantity* (math-fn quantity-1 quantity-2)
-                   (quantity->units quantity-1))
+                    (quantity->units quantity-1))
        (throw (ExceptionInfo. "Quantities do not have the same units" {:quantity-1 quantity-1
                                                                        :quantity-2 quantity-2}))))))
 
@@ -139,10 +140,10 @@
     (boolean (== quantity-1 quantity-2))))
 
 (def ^{:doc "Function that multiplies two quantities."}
-       quantities-multiply* (->quantity-operation-fn * +))
+  quantities-multiply* (->quantity-operation-fn * +))
 
 (def ^{:doc "Function that divides two quantities."}
-        quantities-divide* (->quantity-operation-fn / -))
+  quantities-divide* (->quantity-operation-fn / -))
 
 (def ^{:doc "Function that adds two quantities"}
   quantities-add* (->quantities-equal-fn +))
@@ -158,33 +159,29 @@
     `(wparker.units.core/->quantity* ~q ~u)
     q))
 
-(defmacro quantities-equal?
-  "Macro that expands to check quantity equality if the global flag *assert* is true and expands to a simple equality check otherwise."
-  [q1 q2]
-  (if *assert*
-    `(wparker.units.core/quantities-equal?* ~q1 ~q2)
-    `(== ~q1 ~q2)))
+(defmacro def-quantities-macro
+  "Defines a macro that inserts a quantity-checking function if *assert* is true and a plain math function otherwise.  Takes four arguments:
+  1. The name of the macro to define.
+  2. The docstring for the macro macro to define.
+  3. The quoted fully-qualified symbol of the checked function.  This does need to a symbol, not an inline function.
+  4. The quoted fully-qualified symbol of the equivalent unchecked function.  This does need to be a symbol."
+  [macro-name macro-doc checked-fn unchecked-fn]
+  `(defmacro ~macro-name ~macro-doc [q1# q2#]
+     (if *assert*
+       `(~(symbol ~checked-fn) ~q1# ~q2#) ;; The symbol call avoids placing the function in code, which causes problems when the functions are closures.
+       `(~(symbol ~unchecked-fn) ~q1# ~q2#)))) ;; See discussion at http://stackoverflow.com/questions/11191992/functions-with-closures-and-eval-in-clojure
 
-(defmacro quantities-add [q1 q2]
-  "Macro that expands to add quantities if the global flag *assert* is true and expands to simple addition otherwise."
-  (if *assert*
-    `(wparker.units.core/quantities-add* ~q1 ~q2)
-    `(+ ~q1 ~q2)))
+(def-quantities-macro quantities-equal? "Macro that expands to check quantity equality if the global flag *assert* is true and expands to a simple equality check otherwise."
+  'wparker.units.core/quantities-equal?* 'clojure.core/==)
 
-(defmacro quantities-subtract [q1 q2]
-  "Macro that expands to subtract quantities if the global flag *assert* is true and expands to simple subtraction otherwise."
-  (if *assert*
-    `(wparker.units.core/quantities-subtract* ~q1 ~q2)
-    `(- ~q1 ~q2)))
+(def-quantities-macro quantities-add "Macro that expands to add quantities if the global flag *assert* is true and expands to simple addition otherwise."
+  'wparker.units.core/quantities-add* 'clojure.core/+)
 
-(defmacro quantities-multiply [q1 q2]
-  "Macro that expands to multiply quantities if the global flag *assert* is true and expands to simple multiplication otherwise."
-  (if *assert*
-    `(wparker.units.core/quantities-multiply* ~q1 ~q2)
-    `(* ~q1 ~q2)))
+(def-quantities-macro quantities-subtract "Macro that expands to subtract quantities if the global flag *assert* is true and expands to simple subtraction otherwise."
+  'wparker.units.core/quantities-subtract* 'clojure.core/-)
 
-(defmacro quantities-divide [q1 q2]
-  "Macro that expands to divide quantities if the global flag *assert* is true and expands to simple division otherwise."
-  (if *assert*
-    `(wparker.units.core/quantities-divide* ~q1 ~q2)
-    `(/ ~q1 ~q2)))
+(def-quantities-macro quantities-multiply "Macro that expands to multiply quantities if the global flag *assert* is true and expands to simple multiplication otherwise."
+  'wparker.units.core/quantities-multiply* 'clojure.core/*)
+
+(def-quantities-macro quantities-divide "Macro that expands to divide quantities if the global flag *assert* is true and expands to simple division otherwise."
+  'wparker.units.core/quantities-divide* 'clojure.core//)
