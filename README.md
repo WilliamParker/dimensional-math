@@ -2,9 +2,14 @@
 
 A Clojure library for math with units.
 
+## API Docs
+
+http://williamparker.github.io/units/
+
 ## Continuous integration
 
 https://travis-ci.org/WilliamParker/units
+
 ![Travis CI status](https://travis-ci.org/WilliamParker/units.svg?branch=master)
 
 ## Motivation
