@@ -8,6 +8,14 @@
             ExceptionInfo
             Ratio]))
 
+(def ^:dynamic *check-units* true)
+
+(defn ^{:doc "Fixture that executes a zero-arity function with unit checking disabled.  Note that quantity creation is also disabled,
+        so any quantities created in this scope should not be used in unit-checked operations outside it."}
+  without-unit-checks [f]
+  (binding [*check-units* false]
+    (f)))
+
 ;; Stores the map of number objects to units.
 (def ^:private units-map (java.util.Collections/synchronizedMap
                           (ReferenceIdentityMap.)))
@@ -65,9 +73,11 @@
 
 (defn ^{:doc "Given a number, returns a new number instance that is associated with the given units."}
   ->quantity* [magnitude units]
-  (let [copied-num (clone-number magnitude)]
-    (.put ^java.util.Map units-map copied-num units)
-    copied-num))
+  (if *check-units*
+    (let [copied-num (clone-number magnitude)]
+      (.put ^java.util.Map units-map copied-num units)
+      copied-num)
+    magnitude))
 
 (defn ^{:doc "Returns a string representing a quantity with units.  Note that the standard str function just returns
         the magnitude as a string, while this function includes units.  If unit checking is only turned on in testing this function
@@ -93,7 +103,7 @@
         units-2 (quantity->units quantity-2)]
     (boolean (and (= (set (keys units-1))
                      (set (keys units-2)))
-                  (every? #(== (units-1 %) ;; TODO: Update to allow user to specify an equality tolerance for floating-point powers of units.
+                  (every? #(== (units-1 %)
                                (units-2 %))
                           (keys units-1))))))
 
@@ -105,39 +115,48 @@
   The unit-fn can assume that it will receive numeric arguments; if a unit is not present in a quantity its' power is 0."
   [math-fn unit-fn]
   (fn [quantity-1 quantity-2]
-    (assert (every? quantity? [quantity-1 quantity-2]))
-    (->quantity* (math-fn quantity-1 quantity-2)
-                 (filter-zeroes (let [units-1 (quantity->units quantity-1)
-                                      units-2 (quantity->units quantity-2)
-                                      all-keys (distinct (concat (keys units-1)
-                                                                 (keys units-2)))
-                                      units-power-fn (fn [k] ((fnil unit-fn 0 0)
-                                                              (units-1 k)
-                                                              (units-2 k)))]
-                                  (zipmap all-keys (map units-power-fn all-keys)))))))
+    (if *check-units*
+      (do
+        (assert (every? quantity? [quantity-1 quantity-2]))
+        (->quantity* (math-fn quantity-1 quantity-2)
+                     (filter-zeroes (let [units-1 (quantity->units quantity-1)
+                                          units-2 (quantity->units quantity-2)
+                                          all-keys (distinct (concat (keys units-1)
+                                                                     (keys units-2)))
+                                          units-power-fn (fn [k] ((fnil unit-fn 0 0)
+                                                                  (units-1 k)
+                                                                  (units-2 k)))]
+                                      (zipmap all-keys (map units-power-fn all-keys))))))
+      (math-fn quantity-1 quantity-2))))
 
 (defn ->quantities-equal-fn
   "Returns a function that operates on two quantities with the same units and returns a new quantity with the same units.  If the two quantities
   have different units an exception is thrown."
   ([math-fn]
    (fn [quantity-1 quantity-2]
-     (assert (every? quantity? [quantity-1 quantity-2]))
-     (if (units-equal? quantity-1 quantity-2)
-       (->quantity* (math-fn quantity-1 quantity-2)
-                    (quantity->units quantity-1))
-       (throw (ExceptionInfo. "Quantities do not have the same units" {:quantity-1 quantity-1
-                                                                       :quantity-2 quantity-2}))))))
+     (if *check-units*
+       (do
+         (assert (every? quantity? [quantity-1 quantity-2]))
+         (if (units-equal? quantity-1 quantity-2)
+           (->quantity* (math-fn quantity-1 quantity-2)
+                        (quantity->units quantity-1))
+           (throw (ExceptionInfo. "Quantities do not have the same units" {:quantity-1 quantity-1
+                                                                           :quantity-2 quantity-2}))))
+       (math-fn quantity-1 quantity-2)))))
 
 (defn quantities-equal?*
   "Tests if two quantities are equal.  The arguments should always be quantities."
   [quantity-1 quantity-2]
-  (assert (every? quantity? [quantity-1 quantity-2]))
-  (let [units-1 (quantity->units quantity-1)
-        units-2 (quantity->units quantity-2)]
-    (if (not (units-equal? quantity-1 quantity-2))
-      (throw (ExceptionInfo. "Two quantities that are compared should have equal units." {:quantity-1 quantity-1
-                                                                                          :quantity-2 quantity-2})))
-    (boolean (== quantity-1 quantity-2))))
+  (if *check-units*
+    (do
+      (assert (every? quantity? [quantity-1 quantity-2]))
+      (let [units-1 (quantity->units quantity-1)
+            units-2 (quantity->units quantity-2)]
+        (if (not (units-equal? quantity-1 quantity-2))
+          (throw (ExceptionInfo. "Two quantities that are compared should have equal units." {:quantity-1 quantity-1
+                                                                                              :quantity-2 quantity-2})))
+        (boolean (== quantity-1 quantity-2))))
+    (== quantity-1 quantity-2)))
 
 (def ^{:doc "Function that multiplies two quantities."}
   quantities-multiply* (->quantity-operation-fn * +))
@@ -159,6 +178,7 @@
     `(wparker.units.core/->quantity* ~q ~u)
     q))
 
+;; TODO: Remove the need to provide quoted symbols.
 (defmacro def-quantities-macro
   "Defines a macro that inserts a quantity-checking function if *assert* is true and a plain math function otherwise.  Takes four arguments:
   1. The name of the macro to define.

@@ -113,7 +113,6 @@
     (is (thrown? ExceptionInfo (quantities-add* a b)))
     (is (thrown? ExceptionInfo (quantities-subtract* a b)))))
 
-
 ;;; Test quantity equality
 
 (deftest test-quantity-equality-same-units
@@ -129,6 +128,29 @@
     ;; since .5 has an exact binary representation.
     (is (quantities-equal?* d e))
     (is (ratio? e))))
+
+(deftest ^{:doc "Verify that the without-unit-checks test hook disables unit checking."}
+  test-without-unit-checks
+  (without-unit-checks
+    (fn []
+      (is (not (quantity? (->quantity* 7 {:N 1}))))))
+  (let [quantity-1 (->quantity* 1 {:m 1})
+        quantity-2 (->quantity* 1 {:m 2})
+        quantity-3 (->quantity* 2 {:m 1})]
+    (is (thrown? ExceptionInfo (not (quantities-equal?* quantity-1 quantity-2))))
+    (is (thrown? ExceptionInfo (quantities-add* quantity-1 quantity-2)))
+    (without-unit-checks
+      (fn []
+        (do
+          (is (quantities-equal?* quantity-1 quantity-2))
+          (is (not (quantities-equal?* quantity-1 quantity-3)))
+          (is (= 2
+                 (quantities-add* quantity-1 quantity-2)))
+          ;; For multiplication, verify that no quantity is created as a result of the operation.
+          (with-redefs [->quantity* (fn []
+                                      (throw (RuntimeException. "No quantity should be created when *check-units* is false")))]
+            (is (= 1
+                   (quantities-multiply* quantity-1 quantity-2)))))))))
 
 ;;; Verify that the various macros behave as expected for both true and false values of *assert*.  Note that
 ;;; *assert* is set to true in project.clj.  It is necessary to use eval in order to delay compilation of test data
