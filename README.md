@@ -27,7 +27,7 @@ There are already some Clojure libraries for math with units, such as Meajure at
 4. Users can easily extend the library to support any numeric type by extending the protocol CloneableNumber onto that type.  The only requirement is that it be possible to create a new instance of the numeric type.
 
 
-To be clear, this is highly experimental.  API changes are entirely possible and indeed likely, so usage in anything other than throwaway hobby projects is discouraged at this time.  There is significant test coverage, but it isn't complete coverage, and everyone writes bugs.
+To be clear, this is highly experimental.  API changes are entirely possible and indeed likely, so usage in anything other than throwaway hobby projects is discouraged at this time.  There is significant test coverage, but it isn't complete coverage, and everyone writes bugs.  I have deliberately not deployed any artifacts to Clojars at this time.
 
 ## Usage
 Define quantities
@@ -42,14 +42,14 @@ Define quantities
 
 Then operate on the quantities
 
-```
+````
 (def area (quantities-multiply length width))
 => 12 meters^2
-
 area
 => 12
+````
 
-(quantity->units area)
+```(quantity->units area)
 => {:meters 2}
 ```
 
@@ -67,14 +67,13 @@ without the need to inherit from them.  Also note that the map uses weak referen
 
 Quantities that are compared should have equal units.
 
-```
+````
 (quantities-equal? (->quantity 1 {:ft 1}) (->quantity 1 {:m 1}))
 =>
 ExceptionInfo Two quantities that are compared should have equal units.
+````
 
-```
-
-To extend quantity checking to a new numeric type, simple implement the CloneableNumber protocol on it.  The protocol consists of one function, clone-number, that takes an instance of a number and returns a different but equal instance of the same numeric type.  It is recommended to use the ->checked-copy-fn wrapper, which wraps the copy function and throws an exception if it breaks the library's contract.  For example, if the CloneableNumber was not extended onto the Integer class, we could do so with:
+To extend quantity checking to a new numeric type, implement the CloneableNumber protocol on it.  The protocol consists of one function, clone-number, that takes an instance of a number and returns a different but equal instance of the same numeric type.  It is recommended to use the ->checked-copy-fn wrapper, which wraps the copy function and throws an exception if it breaks the library's contract.  For example, if the CloneableNumber was not extended onto the Integer class, we could do so with:
 
 ```
 (extend-protocol CloneableNumber
@@ -82,27 +81,36 @@ To extend quantity checking to a new numeric type, simple implement the Cloneabl
   (clone-number [x] ((->checked-copy-fn #(java.lang.Integer. ^java.lang.Integer %)) x)))
 ```
 
-->checked-copy-fn takes a single argument - a 1-arity function that copies the number.  The resulting function is also a 1-arity function that copies the number, but with verification that the result is a new object instance.
+->checked-copy-fn takes a single argument - a 1-argument function that takes a numeric argument and copies it.  The resulting function is also a 1-argument function that copies the number, but with verification that the result is a new object instance.
 
-The library also allows the easy creation of functions that check or propogate units from preexisting mathematical functions.  At the moment only two-arity functions are supported.  The key functions are ->quantity-equal-fn, which wraps a two-arity function and throws an exception if the quantities of the arguments are not equal, and ->quantity-operation-fn, which takes a two-arity mathematical function and a two-arity function for merging units.  The units merging function receives the magnitude of the unit on the first quantity as its first argument and the magnitude of the same unit on the second quantity as its second argument; it returns the magnitude of that unit on the result.  If the unit in question does not exist on one of the arguments that value passed is 0.  For example, addition and division are defined with:
-
-```
-(def ^{:doc "Function that adds two quantities"}
-  quantities-add* (->quantities-equal-fn +))
-
-(def ^{:doc "Function that divides two quantities."}
-        quantities-divide* (->quantity-operation-fn / -))
-```
-Note the two arguments to quantities-divide\*. The first argument is the actual mathematical function.  The second argument states that the magnitudes of the units of the quantities should be subtracted. For example, when a quantity with units {:meters 2} is divided by a quantity with units {:meters 1}, we get a quantity with units {:meters 1}.
-
-We can now define a macro that expands to a call to a quantity-checking function at compile time if \*assert\* is true and to an ordinary function otherwise with def-quantities-macro.  For example, for addition:
+The library also allows the easy creation of functions that check or propogate units from preexisting mathematical functions.  At the moment only two-arity functions are supported.  The key functions are ->quantity-equal-fn, which wraps a two-arity function and throws an exception if the quantities of the arguments are not equal, and ->quantity-operation-fn, which takes a two-arity mathematical function and a two-arity function for merging units.  The units merging function receives the magnitude of the unit on the first quantity as its first argument and the magnitude of the same unit on the second quantity as its second argument; it returns the magnitude of that unit on the result.  If the unit in question does not exist on one of the arguments that value passed is 0.  For example, addition and multiplication are defined with:
 
 ```
-(def-quantities-macro quantities-add "Macro that expands to add quantities if the global flag *assert* is true and expands to simple addition otherwise."
-  'wparker.units.core/quantities-add* 'clojure.core/+)
-  ```
+(def ^{:doc "Function that adds quantities.  It must be provided at least 1 argument.
+       Unlike clojure.core/+, this will throw an exception if no arguments are provided."}
+  quantities-add* (->quantities-equal-fn + "addition"))
+```
 
-  Note that the last two arguments are fully-qualified quotes symbols.  These do need to be symbols instead of function objects (like a call to one of the function builders in this library).  The reason is due to problems with embedding functions defined with lexical scope (i.e. closures) in code generated by macros; see the discussion at http://stackoverflow.com/questions/11191992/functions-with-closures-and-eval-in-clojure
+```
+(def ^{:doc "Function that multiplies an arbitrary number of quantities."}
+  quantities-multiply* (->quantity-operation-fn * +))
+```
+
+Note the two arguments to quantities-multiply\*. The first argument is the actual mathematical function.  The second argument states that the magnitudes of the units of the quantities should be subtracted. For example, when a quantity with units {:meters 2} is divided by a quantity with units {:meters 1}, we get a quantity with units {:meters 1}.
+
+We can now define a macro that expands to a call to a quantity-checking function at compile time if \*compile-with-unit-checks\* is true and to an ordinary function otherwise with def-quantities-macro.  For example, for addition:
+
+```
+(def-quantities-macro quantities-add "Macro that expands to add quantities if the global flag
+*assert* is true and expands to simple addition otherwise."
+ wparker.units.core/quantities-add* clojure.core/+)
+```
+  This var can be set for all compilation by globally setting it with a Leiningen injection.
+
+```
+:injections [(require 'wparker.units.core)
+                                (intern 'wparker.units.core '*compile-with-unit-checks* true)]
+```
 
   It is possible that unit checking might be desirable in most cases in a project, but not in all.  The unit-checking macros will expand to either unit-checking functions or the base math functions in the entire project.  However, the library provides a fixture (without-unit-checks) to execute a zero-arity function with unit checking disabled at runtime, even if it was enabled at compile time.
 
@@ -111,15 +119,15 @@ wparker.units.core=> (without-unit-checks (fn [] (quantities-add* (->quantity* 7
 =>10
 ```
 
+When unit powers are floating-point numbers errors may be introduced in unit propagation as in any floating-point calculation.
+When the var \*unit-power-error\* is bound to a number (instead of the default value of nil) the given amount of difference between unit powers will be tolerated in unit checking.
 
 ## Performance notes
 
 It is probably obvious that turning on quantity checking will have performance consequences.  Where large numerical calculations are used this may be significant.  Note, however, that this slowdown may not be linear relative to the unchecked speed.  Firstly, the quantities are stored in a synchronized mutable map.  Thus, the use of quantity checking may limit the effectiveness of parallelization.  Secondly, the quantity builder functions coerce primitive types into boxed values.  A few quantities could potentially force a much larger number of operations to be done with boxed arithmetic rather than primitive math.
 
 ## Known defects/limitations/todos:
--Add ability to specify an equality range instead of just using ==.  This is necessary for floating-point math.  Note that this does not just apply to magnitudes; unit equality with non-integer powers could have problems as well.
 -Add more functions.
--Investigate using a compiler flag other than \*assert\*.  This may not be viable; \*assert\* has the useful property of existing independent of Clojure compilation since it is defined in clojure.lang.RT.java.  See https://github.com/clojure/clojure/blob/master/src/jvm/clojure/lang/RT.java#L197 for details.
 
 In general, this library does use the numeric classes in somewhat strange ways.  I have (hopefully) avoided any reliance on non-contractual behavior in the Java numerical classes.  In the case of the Clojure numerical classes, there is no formal specification that I know of, but the library uses obvious method calls, not hacks.  The quantity generator functions verify that a new object instance is created, so a change that altered this behavior would immediately become obvious.
 
