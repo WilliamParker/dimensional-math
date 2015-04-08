@@ -4,10 +4,28 @@
   (:import [clojure.lang
             ExceptionInfo]
            [org.apache.commons.collections.map
+            AbstractReferenceMap
             ReferenceIdentityMap]
            [clojure.lang
             ExceptionInfo
             Ratio]))
+
+(defn ^{:private true
+        :doc "Internal function for use in pre and post conditions that test for the validity of a units map."}
+  valid-units-map?
+  [units]
+  (boolean (and
+            (map? units)
+            (every? (partial instance? clojure.lang.Keyword) (keys units))
+            (every? number? (vals units))
+            (not-any? (partial == 0) (vals units)))))
+
+(defn ^{:private true
+        :doc "Filters units with a power of 0 from a units map."}
+  filter-zeroes [units]
+  {:post [(valid-units-map? %)]}
+  (into {}
+        (filter #(not (== 0 (val %))) units)))
 
 (def ^{:dynamic true
        :doc "Dynamic var that, when bound to true, causes quantity macro expansions to expand to
@@ -24,20 +42,29 @@
         Note that quantity creation is also disabled, so any quantities created in this scope
         should not be used in unit-checked operations outside it."}
   without-unit-checks [f]
+  {:pre [(ifn? f)]}
   (binding [*check-units* false]
     (f)))
 
-;; Stores the map of number objects to units.  A reference-based map is used to ensure that storing unit information
-;; will not prevent quantities from being garbage collected.
+;; Stores the map of number objects to units.  A reference-based map is used to ensure that numbers retain their units
+;; even when a equal number with different units is added.  Note that the quantity functions are guaranteed to create a new object,
+;; even when a cached value (for example, of cached Integer objects from Integer.valueOf) could be produced. Weak reference are used
+;; for the keys so that the unit mappings for integers can be garbage collected.  The unit mappings, on the other hand, are likely
+;; to only exist inside this map, so they use hard references, but the values are purged when their keys are since the purgeValues parameter
+;; of the map constructor is true.
 (def ^:private units-map (java.util.Collections/synchronizedMap
-                          (ReferenceIdentityMap.)))
+                          (ReferenceIdentityMap. AbstractReferenceMap/WEAK AbstractReferenceMap/HARD true)))
 
 (defn ^{:doc "Returns true if its argument corresponds to a quantity and false otherwise."}
   quantity? [x]
+  {:pre [(number? x)]
+   :post [(= (boolean %) %)]}
   (.containsKey ^java.util.Map units-map x))
 
 (defn ^{:doc "Given a quantity, returns its units map."}
   quantity->units [x]
+  {:pre [(quantity? x)]
+   :post [(valid-units-map? %)]}
   (.get ^java.util.Map units-map x))
 
 (defprotocol ^{:doc "Every type that can be considered a quantity needs to
@@ -52,6 +79,8 @@
         If they are not, the second one is returned."
         :private true}
   number-instance-check [x y]
+  {:pre [(number? x)
+         (number? y)]}
   (if (identical? x y)
     (throw (ex-info "The units library failed to create a new instance of a number when creating a quantity." {:values [x y]}))
     y))
@@ -60,7 +89,8 @@
         clone-number contract and wraps it with a test that the number was
         successfully copied."}
   ->checked-copy-fn [f]
-  (fn [x]
+  {:pre [(ifn? f)]}
+  (fn [x] {:pre [(number? x)]}
     (number-instance-check x (f x))))
 
 (extend-protocol CloneableNumber
@@ -97,9 +127,11 @@
 
 (defn ^{:doc "Given a number, returns a new number instance that is associated with the given units."}
   ->quantity* [magnitude units]
+  {:pre [(number? magnitude)]}
   (if *check-units*
-    (let [copied-num (clone-number magnitude)]
-      (.put ^java.util.Map units-map copied-num units)
+    (let [copied-num (clone-number magnitude)
+          filtered-units (filter-zeroes units)]
+      (.put ^java.util.Map units-map copied-num filtered-units)
       copied-num)
     magnitude))
 
@@ -107,6 +139,8 @@
         the magnitude as a string, while this function includes units.  This follows because the library associates
         units with a number, but the underlying object instance of the number is unchanged."}
   quantity->str [quantity]
+  {:pre [(quantity? quantity)]
+   :post [(instance? java.lang.String %)]}
   (str quantity " "
        (apply str (clojure.string/join " "
                                        (map #(str (name (key %))
@@ -114,18 +148,16 @@
                                                   (val %))
                                             (quantity->units quantity))))))
 
-(defn ^{:private true
-        :doc "Filters units with a power of 0 from a units map."}
-  filter-zeroes [units]
-  (into {}
-        (filter #(not (== 0 (val %))) units)))
-
-(def ^{:dynamic true} *unit-power-error* nil)
+(def ^{:dynamic true
+       :doc "If bound to a number, two unit powers are considered equal to each other if they are within
+       that distance of each other.  For example, if bound to .01, then meters^1.001 and meters^1 would be considered
+       the same unit."}
+  *unit-power-error* nil)
 
 (defn units-equal?
   "Tests if an arbitrary number of quantities have the same units."
   [& quantities]
-  (assert (every? quantity? quantities))
+  {:pre [(every? quantity? quantities)]}
   (let [units (map quantity->units quantities)
         unit-types (map (comp set keys) units)
         ;; Allow a difference in quantity powers if one is set.  This is expected if
@@ -158,7 +190,12 @@
   unit operation is not commutative the creator may need to wrap the underlying function to ensure that arguments are received in the correct
   order and number to ensure correct unit propagation."
   [math-fn unit-fn]
+  {:pre [(ifn? math-fn)
+         (ifn? unit-fn)]
+   :post [(fn? %)]}
   (fn [& quantities]
+    {:pre [(every? number? quantities)]
+     :post [(number? %)]}
     (let [unit-merge-fn (fn [& args]
                           (apply unit-fn (map #(if (nil? %)
                                                  0
@@ -182,7 +219,12 @@
   "Returns a function that operates on two quantities with the same units and returns a new quantity with the same units.  If the two quantities
   have different units an exception is thrown."
   ([math-fn operation-description]
+   {:pre [(ifn? math-fn)
+          (instance? java.lang.String operation-description)]
+    :post [(fn? %)]}
    (fn [& quantities]
+     {:pre [(every? number? quantities)]
+      :post [(number? %)]}
      (if *check-units*
        (do
          (when (empty? quantities)
@@ -200,7 +242,11 @@
   "Returns a function that compares two quantities that must have equal units.  This function will returns a boolean.
   Takes a function to compare two numbers."
   [compare-fn fn-desc]
+  {:pre [(ifn? compare-fn)
+         (instance? java.lang.String fn-desc)]
+   :post [(fn? %)]}
   (fn [& compared-quantities]
+    {:pre [(every? number? compared-quantities)]}
     (do
       (when *check-units*
         (do

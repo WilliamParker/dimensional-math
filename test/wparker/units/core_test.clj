@@ -4,7 +4,8 @@
             [clojure.test.check.properties :as prop]
             [clojure.test.check.generators :as gen]
             [clojure.test.check.clojure-test :as check-test]
-            [clojure.math.combinatorics :as combo])
+            [clojure.math.combinatorics :as combo]
+            [clojure.set :as clj-set])
   (:import [clojure.lang
             ArityException
             ExceptionInfo]
@@ -58,13 +59,22 @@
     (is (nil? (.get units-map (int 4))))))
 
 (check-test/defspec quantity-creation-parameterized
-  50 ;; TODO: The time taken by this test seems to be far greater than the time taken when I build a large number of quantities
-  ;; in a REPL.  Until this is fixed the test size must be limited to relatively small numbers.
+  50
   (prop/for-all [n (gen/one-of [gen/int gen/ratio]) ;; TODO: Add other numeric type generators when they are available.
                  units (gen/map gen/keyword gen/int)]
-                (let [quantity-1 (->quantity* n units)]
-                  (is (= (.get units-map quantity-1)
-                         units))
+                (let [quantity-1 (->quantity* n units)
+                      quantity-units (.get units-map quantity-1)]
+                  ;; We can't test that the units map that is retrieved is equal to the initial units map
+                  ;; since zero powers are filtered out.  We iterate over the entries in the map and ensure that
+                  ;; each was handled correctly instead; we also check that there are no extra keys in the retrieved map.
+                  (doseq [entry units]
+                    (if (== (val entry) 0)
+                      (is (not (contains? (set (keys quantity-units))
+                                          (key entry))))
+                      (is (= ((key entry) quantity-units)
+                             (val entry)))))
+                  (is (clj-set/subset? (set (keys quantity-units))
+                                       (set (keys units))))
                   (is (nil? (.get units-map n))))))
 
 (deftest units-equal-test
