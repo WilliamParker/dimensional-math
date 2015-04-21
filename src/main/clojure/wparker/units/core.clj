@@ -189,9 +189,10 @@
   The unit-fn can assume that it will receive numeric arguments; if a unit is not present in a quantity its' power is 0.  If the underlying
   unit operation is not commutative the creator may need to wrap the underlying function to ensure that arguments are received in the correct
   order and number to ensure correct unit propagation."
-  [math-fn unit-fn]
+  [math-fn unit-fn operation-description]
   {:pre [(ifn? math-fn)
-         (ifn? unit-fn)]
+         (ifn? unit-fn)
+         (instance? String operation-description)]
    :post [(fn? %)]}
   (fn [& quantities]
     {:pre [(every? number? quantities)]
@@ -261,25 +262,25 @@
               (throw (ExceptionInfo. "Two quantities that are compared should have equal units." {}))))))
       (boolean (apply compare-fn compared-quantities)))))
 
-(def ^{:doc "Tests if an arbitrary number of quantities are equal."}
+(def ^{:doc "Tests if an arbitrary positive number of quantities are equal."}
   quantities-equal?* (->quantity-comparison-fn == "equality"))
 
-(def ^{:doc "Tests if an arbitrary number of quantities are less than each other."}
+(def ^{:doc "Tests if an arbitrary positive number of quantities are less than each other."}
   quantities-less-than?* (->quantity-comparison-fn < "less than"))
 
-(def ^{:doc "Tests if an arbitrary number of quantities are greater than each other."}
+(def ^{:doc "Tests if an arbitrary positive number of quantities are greater than each other."}
   quantities-greater-than?* (->quantity-comparison-fn > "greater than"))
 
 (def ^{:doc "Function that multiplies an arbitrary number of quantities."}
-  quantities-multiply* (->quantity-operation-fn * +))
+  quantities-multiply* (->quantity-operation-fn * + "multiplication"))
 
-(def ^{:doc "Function that divides two quantities."}
+(def ^{:doc "Function that divides an arbitrary positive number of quantities."}
   quantities-divide*
   ;; Clojure division returns 1/argument when a single argument is provided.  In order to ensure proper unit handling,
   ;; namely that the inverse has inverted units, the quantity-aware function is wrapped so that it receives a scalar
   ;; divided by the argument.
   (fn [& args]
-    (let [base-fn (->quantity-operation-fn / -)]
+    (let [base-fn (->quantity-operation-fn / - "division")]
       (if (and *check-units*
                (== (count args) 1))
         (base-fn (->quantity* 1 {}) (first args))
