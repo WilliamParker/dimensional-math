@@ -1,6 +1,6 @@
-(ns wparker.units.core-test
+(ns wparker.dimensional-math.core-test
   (:require [clojure.test :refer :all]
-            [wparker.units.core :refer :all]
+            [wparker.dimensional-math.core :refer :all]
             [clojure.test.check.properties :as prop]
             [clojure.test.check.generators :as gen]
             [clojure.test.check.clojure-test :as check-test]
@@ -13,7 +13,7 @@
             IllegalArgumentException]))
 
 ;; Allows tests against the private units map.
-(def units-map (var-get #'wparker.units.core/units-map))
+(def units-map (var-get #'wparker.dimensional-math.core/units-map))
 
 (deftest ^{:doc "Test that all numeric types for which the library implemements clone-number implement it correctly.
            Also verifies that exceptions are thrown when invalid types are cloned."}
@@ -422,7 +422,8 @@
 (check-test/defspec parameterized-multiplication-test
   50
   (prop/for-all [raw-qs (gen/resize 8 (gen/such-that #(> (count %) 2)
-                                                     (gen/vector (gen/tuple gen/int (gen/map gen/keyword gen/int)))))]
+                                                     (gen/vector (gen/tuple gen/int (gen/map gen/keyword gen/int)))
+                                                     80))]
                 ;; Setting the size prevents integer overflow, since the size caps the magnitude of gen/int.
                 ;; TODO: Cap gen/int while allowing for variable vector size.
                 (let [ms (map first raw-qs)
@@ -439,10 +440,13 @@
 
 ;;; Note that the generators for addition and multiplication are different in that added quantities must all have the same units.
 
+;; TODO: Improve generated tests so large numbers of tries on such-that calls are not needed.  The generators usually succeeded with
+;; the default ceiling of 10; using 80 should dramatically reduce the probability of failure.
 (check-test/defspec parameterized-addition-test
   50
   (prop/for-all [vs (gen/such-that #(> (count %) 2)
-                                   (gen/vector gen/int))
+                                   (gen/vector gen/int)
+                                   80)
                  units (gen/map gen/keyword gen/int)]
                 (let [qs (map #(->quantity* % units) vs)
                       permutations (map shuffle (repeat 5 qs))
@@ -457,7 +461,9 @@
 (check-test/defspec parameterized-subtraction-test
   50
   (prop/for-all [h gen/int
-                 ts (gen/such-that #(> (count %) 2) (gen/vector gen/int))]
+                 ts (gen/such-that #(> (count %) 2)
+                                   (gen/vector gen/int)
+                                   80)]
                 ;; Shuffle the elements after the first, but keep the first element in the vector constant.
                 (let [h-built (->quantity* h {:ft 1})
                       ts-built (map #(->quantity* % {:ft 1}) ts)
@@ -479,7 +485,8 @@
   (prop/for-all [ns (gen/resize 8
                                 (gen/such-that
                                  #(> (count %) 2)
-                                 (gen/vector gen/s-pos-int)))]
+                                 (gen/vector gen/s-pos-int)
+                                 80))]
                 (let [ns-product (->quantity* (reduce * ns) {:ft 10})
                       ns-shuffled (map shuffle (repeat 10 ns))
                       qs-shuffled (map (fn [lyst] (map #(->quantity* % {:ft 1}) lyst)) ns-shuffled)]

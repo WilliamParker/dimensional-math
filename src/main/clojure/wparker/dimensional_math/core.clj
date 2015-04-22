@@ -1,4 +1,4 @@
-(ns wparker.units.core
+(ns wparker.dimensional-math.core
   (:require [clojure.string]
             [clojure.set :refer [union]])
   (:import [clojure.lang
@@ -299,7 +299,7 @@
   and simply expands to the magnitude otherwise."
   [q u]
   (if *compile-with-unit-checks*
-    `(wparker.units.core/->quantity* ~q ~u)
+    `(wparker.dimensional-math.core/->quantity* ~q ~u)
     q))
 
 (defmacro def-quantities-macro
@@ -317,24 +317,24 @@
          `(~(symbol unchecked#) ~@qs#))))) ;; See discussion at http://stackoverflow.com/questions/11191992/functions-with-closures-and-eval-in-clojure
 
 (def-quantities-macro quantities-add "Macro that expands to add quantities if the global flag *compile-with-unit-checks* is true and expands to simple addition otherwise."
-  wparker.units.core/quantities-add* clojure.core/+)
+  wparker.dimensional-math.core/quantities-add* clojure.core/+)
 
 (def-quantities-macro quantities-subtract "Macro that expands to subtract quantities if the global flag *compile-with-unit-checks* is true and expands to simple subtraction otherwise."
-  wparker.units.core/quantities-subtract* clojure.core/-)
+  wparker.dimensional-math.core/quantities-subtract* clojure.core/-)
 
 (def-quantities-macro quantities-multiply "Macro that expands to multiply quantities if the global flag *compile-with-unit-checks* is true and expands to simple multiplication otherwise."
-  wparker.units.core/quantities-multiply* clojure.core/*)
+  wparker.dimensional-math.core/quantities-multiply* clojure.core/*)
 
 (def-quantities-macro quantities-divide "Macro that expands to divide quantities if the global flag *compile-with-unit-checks* is true and expands to simple division otherwise."
-  wparker.units.core/quantities-divide* clojure.core//)
+  wparker.dimensional-math.core/quantities-divide* clojure.core//)
 
 (def-quantities-macro quantities-equal? "Macro that expands to check quantity equality if the global flag *compile-with-unit-checks* is true and expands to a simple equality check otherwise."
-  wparker.units.core/quantities-equal?* clojure.core/==)
+  wparker.dimensional-math.core/quantities-equal?* clojure.core/==)
 
 (def-quantities-macro quantities-less-than? "Macro that expands to check a less-than quantity inequality if *compile-with-unit-checks* is true
   and expands to a simple less-than check otherwise."
-  wparker.units.core/quantities-less-than?* clojure.core/<)
+  wparker.dimensional-math.core/quantities-less-than?* clojure.core/<)
 
 (def-quantities-macro quantities-greater-than? "Macro that expands to check a greater-than quantity inequality if *compile-with-unit-checks* is true
   and expands to a simple greater-than check otherwise."
-  wparker.units.core/quantities-greater-than?* clojure.core/>)
+  wparker.dimensional-math.core/quantities-greater-than?* clojure.core/>)

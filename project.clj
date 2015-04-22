@@ -1,5 +1,5 @@
-(defproject units "0.0.1-SNAPSHOT"
-  :url "https://github.com/WilliamParker/units"
+(defproject dimensional-math "0.0.1-SNAPSHOT"
+  :url "https://github.com/WilliamParker/dimensional-math"
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   :dependencies [[org.clojure/clojure "1.6.0"]
@@ -13,5 +13,5 @@
                                   [org.clojure/test.check "0.7.0"]]
                    :plugins [[codox "0.8.10"]]
                    :global-vars {*assert* true}
-                   :injections [(require 'wparker.units.core)
-                                (intern 'wparker.units.core '*compile-with-unit-checks* true)]}})
+                   :injections [(require 'wparker.dimensional-math.core)
+                                (intern 'wparker.dimensional-math.core '*compile-with-unit-checks* true)]}})
