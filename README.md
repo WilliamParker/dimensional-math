@@ -4,13 +4,13 @@ A Clojure library for math with units.
 
 ## API Docs
 
-http://williamparker.github.io/units/
+http://williamparker.github.io/dimensional-math/
 
 ## Continuous integration
 
-https://travis-ci.org/WilliamParker/units
+https://travis-ci.org/WilliamParker/dimensional-math
 
-![Travis CI status](https://travis-ci.org/WilliamParker/units.svg?branch=master)
+![Travis CI status](https://travis-ci.org/WilliamParker/dimensional-math.svg?branch=master)
 
 ## Motivation
 
