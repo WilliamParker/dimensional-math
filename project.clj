@@ -1,4 +1,5 @@
-(defproject dimensional-math "0.0.1"
+(defproject dimensional-math "0.0.2"
+  :description "A library for validation of units in numeric operations with compile-time switching between checked and unchecked operations."
   :url "https://github.com/WilliamParker/dimensional-math"
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
