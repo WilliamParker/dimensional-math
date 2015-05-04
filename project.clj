@@ -1,4 +1,4 @@
-(defproject dimensional-math "0.0.1-SNAPSHOT"
+(defproject dimensional-math "0.0.1"
   :url "https://github.com/WilliamParker/dimensional-math"
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
