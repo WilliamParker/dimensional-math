@@ -6,6 +6,10 @@ A Clojure library for math with units.
 
 http://williamparker.github.io/dimensional-math/
 
+## Leiningen
+
+[![Clojars Project](http://clojars.org/dimensional-math/latest-version.svg)](http://clojars.org/dimensional-math)
+
 ## Continuous integration
 
 https://travis-ci.org/WilliamParker/dimensional-math
